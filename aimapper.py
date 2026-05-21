@@ -617,11 +617,16 @@ const CL={
 const gc=l=>CL[l]||CL.other;
 
 function init(){
-  D.modules.forEach(m=>{
+  // Place modules in a circle — no physics needed, positions are fixed from the start
+  const n=D.modules.length;
+  const R=Math.max(220,n*28);
+  D.modules.forEach((m,i)=>{
     const c=gc(m.lang);
+    const a=(2*Math.PI*i/n)-Math.PI/2;
     nodes.add({id:m.id,label:m.label,
       title:m.path+'\\n'+m.lines+' lines  '+m.fn_count+' fns\\nClick to expand',
       shape:'box',margin:8,
+      x:Math.round(R*Math.cos(a)),y:Math.round(R*Math.sin(a)),
       color:{background:c.bg,border:c.b,highlight:{background:'#2d333b',border:c.b}},
       font:{color:c.b,size:14,bold:true,face:'monospace'},
       borderWidth:2,_t:'m'});
@@ -629,9 +634,10 @@ function init(){
   D.mod_edges.forEach((e,i)=>{
     edges.add({id:'me'+i,from:e.from,to:e.to,
       arrows:{to:{enabled:true,scaleFactor:0.6}},
-      color:{color:'#30363d',highlight:'#58a6ff'},
+      color:{color:'#484f58',highlight:'#58a6ff'},
       width:Math.max(1,Math.min(Math.sqrt(e.count),4)),
       title:e.count+' cross-call'+(e.count>1?'s':''),
+      smooth:{type:'curvedCW',roundness:0.2},
       _t:'me'});
   });
 }
@@ -641,20 +647,21 @@ function expand(mid){
   expanded.add(mid);
   const m=mods[mid],c=gc(m.lang),n=m.functions.length;
   const p=net.getPosition(mid);
-  const r=70+Math.min(n,30)*5;
+  const r=Math.max(80,n*14);
   m.functions.forEach((fid,i)=>{
     const f=fns[fid];if(!f||nodes.get(fid))return;
     const a=(2*Math.PI*i/n)-Math.PI/2;
     nodes.add({id:f.id,label:f.name,
       title:f.sig+'\\nL'+f.line+'\\nClick to show calls',
       shape:'dot',size:10,
-      x:p.x+r*Math.cos(a),y:p.y+r*Math.sin(a),
+      x:Math.round(p.x+r*Math.cos(a)),y:Math.round(p.y+r*Math.sin(a)),
       color:{background:c.b+'44',border:c.b,highlight:{background:c.b,border:'#fff'}},
       font:{color:'#c9d1d9',size:11,face:'monospace'},
+      physics:false,
       _t:'f',_m:mid});
     edges.add({id:'mf'+fid,from:mid,to:fid,
       arrows:'',dashes:[4,4],width:1,
-      color:{color:c.b+'30'},_t:'xe'});
+      color:{color:c.b+'30'},smooth:{type:'dynamic'},_t:'xe'});
   });
   nodes.update({id:mid,label:m.label+' ▾',borderWidth:3});
 }
@@ -698,12 +705,9 @@ function toggleCalls(fid){
 init();
 
 const net=new vis.Network(document.getElementById('graph'),{nodes,edges},{
-  physics:{solver:'forceAtlas2Based',
-    forceAtlas2Based:{gravitationalConstant:-30,centralGravity:0.1,springLength:150,springConstant:0.08,damping:0.6},
-    stabilization:{iterations:200,updateInterval:50,fit:true}},
-  layout:{randomSeed:42},
-  interaction:{hover:true,tooltipDelay:150,navigationButtons:false,keyboard:true},
-  edges:{smooth:{type:'dynamic'},selectionWidth:2},
+  physics:{enabled:false},
+  interaction:{hover:true,tooltipDelay:150,navigationButtons:false,keyboard:true,dragNodes:true},
+  edges:{smooth:{type:'curvedCW',roundness:0.2},selectionWidth:2},
 });
 
 net.on('click',p=>{
@@ -714,17 +718,14 @@ net.on('click',p=>{
   else if(nd._t==='f'){toggleCalls(id);}
 });
 
-net.on('stabilizationIterationsDone',()=>{
-  net.setOptions({physics:{enabled:false}});
-  net.fit({animation:{duration:400,easingFunction:'easeInOutQuad'}});
-});
+net.once('afterDrawing',()=>net.fit({animation:{duration:500,easingFunction:'easeInOutQuad'}}));
 
 function resetView(){
   [...expanded].forEach(id=>collapse(id));
-  net.setOptions({physics:{enabled:true,stabilization:{iterations:100}}});
-  setTimeout(()=>{net.setOptions({physics:{enabled:false}});net.fit();},1500);
+  net.fit({animation:{duration:500,easingFunction:'easeInOutQuad'}});
 }
-function expandAll(){D.modules.forEach(m=>expand(m.id));net.setOptions({physics:{enabled:true}});setTimeout(()=>net.fit(),800);}
+function expandAll(){D.modules.forEach(m=>expand(m.id));setTimeout(()=>net.fit({animation:{duration:600,easingFunction:'easeInOutQuad'}}),100);}
+function collapseAll(){[...expanded].forEach(id=>collapse(id));}
 function collapseAll(){[...expanded].forEach(id=>collapse(id));}
 </script>
 </body>
