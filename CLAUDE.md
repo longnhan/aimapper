@@ -1,6 +1,6 @@
 <!-- aimapper-map -->
 ## AI map
-Read `aimapper.md` before exploring this codebase — it maps every function and
+Read `.aimapper/aimapper.md` before exploring this codebase — it maps every function and
 call graph so you can locate the right file/line without reading raw source.
-Run `python3 aimapper.py` to regenerate after big changes.
+Regenerate after big changes: `python3 /home/nhanmhl/13_ai_mapping_gen/aimapper/aimapper.py`
 <!-- /aimapper-map -->

@@ -1,0 +1,4 @@
+.aimapper/
+__pycache__/
+*.pyc
+.vis-network.min.js
