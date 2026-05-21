@@ -349,19 +349,25 @@ def parse_file(path: Path, root: Path) -> Optional[dict]:
 _ALL_EXTS = C_EXTS | PY_EXTS | JSON_EXTS
 
 
-def collect_files(root: Path) -> List[Path]:
+def collect_files(root: Path, scan_dirs: List[Path]) -> List[Path]:
+    """Walk each directory in scan_dirs and collect supported files."""
+    seen: set = set()
     files = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(
-            d for d in dirnames
-            if d not in SKIP_DIRS and not d.endswith(".egg-info")
-        )
-        for fname in sorted(filenames):
-            if fname in SKIP_FILES:
-                continue
-            fpath = Path(dirpath) / fname
-            if fpath.suffix.lower() in _ALL_EXTS:
-                files.append(fpath)
+    for base in scan_dirs:
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = sorted(
+                d for d in dirnames
+                if d not in SKIP_DIRS and not d.endswith(".egg-info")
+            )
+            for fname in sorted(filenames):
+                if fname in SKIP_FILES:
+                    continue
+                fpath = Path(dirpath) / fname
+                if fpath in seen:
+                    continue
+                seen.add(fpath)
+                if fpath.suffix.lower() in _ALL_EXTS:
+                    files.append(fpath)
     return files
 
 
@@ -442,15 +448,7 @@ def _inject_claude_md(project_root: Path) -> Path:
     Prefers existing CLAUDE.md; falls back to README.md; creates CLAUDE.md if
     neither exists. Returns the path that was written.
     """
-    claude = project_root / "CLAUDE.md"
-    readme = project_root / "README.md"
-
-    if claude.exists():
-        target = claude
-    elif readme.exists():
-        target = readme
-    else:
-        target = claude  # will be created
+    target = project_root / "CLAUDE.md"
 
     if target.exists():
         text = target.read_text(encoding="utf-8")
@@ -476,7 +474,7 @@ def _inject_claude_md(project_root: Path) -> Path:
     return target
 
 
-# ─── interactive prompt ───────────────────────────────────────────────────────
+# ─── interactive prompts ─────────────────────────────────────────────────────
 
 def _ask_root() -> Path:
     cwd = Path.cwd()
@@ -490,6 +488,40 @@ def _ask_root() -> Path:
         print(f"error: '{p}' is not a directory", file=sys.stderr)
         sys.exit(1)
     return p
+
+
+def _ask_sources(root: Path) -> List[Path]:
+    """
+    Ask which subdirectories to scan.
+    Input is a space/comma-separated list of paths relative to root.
+    Empty input means scan the entire root.
+    Invalid entries are reported and skipped.
+    """
+    try:
+        raw = input("Source directories to scan (space or comma separated) [.]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        sys.exit(0)
+
+    if not raw:
+        return [root]
+
+    # Split on commas and/or whitespace
+    tokens = [t.strip() for t in re.split(r'[,\s]+', raw) if t.strip()]
+    dirs: List[Path] = []
+    for token in tokens:
+        p = (root / token).resolve()
+        if not p.exists():
+            print(f"  warning: '{token}' not found, skipping", file=sys.stderr)
+        elif not p.is_dir():
+            print(f"  warning: '{token}' is not a directory, skipping", file=sys.stderr)
+        else:
+            dirs.append(p)
+
+    if not dirs:
+        print("error: no valid source directories given", file=sys.stderr)
+        sys.exit(1)
+    return dirs
 
 
 # ─── main ────────────────────────────────────────────────────────────────────
@@ -506,8 +538,9 @@ def main() -> None:
     args = ap.parse_args()
 
     root = _ask_root()
+    scan_dirs = _ask_sources(root)
 
-    files = collect_files(root)
+    files = collect_files(root, scan_dirs)
     if not files:
         print("no supported files found", file=sys.stderr)
         sys.exit(0)
