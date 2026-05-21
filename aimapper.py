@@ -576,7 +576,7 @@ body{background:#0d1117;color:#c9d1d9;font:13px/1.4 monospace;overflow:hidden}
 button{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:3px 12px;border-radius:6px;cursor:pointer;font:inherit}
 button:hover{background:#30363d}
 #hint{margin-left:auto;color:#8b949e;font-size:12px}
-#graph{flex:1}
+#graph{flex:1;min-height:0;overflow:hidden}
 #leg{position:fixed;bottom:14px;right:14px;background:#161b22dd;border:1px solid #30363d;border-radius:8px;padding:10px 14px;font-size:12px;line-height:2}
 .lr{display:flex;align-items:center;gap:8px}
 .lc{width:10px;height:10px;border-radius:50%;flex-shrink:0}
@@ -620,7 +620,7 @@ function init(){
   D.modules.forEach(m=>{
     const c=gc(m.lang);
     nodes.add({id:m.id,label:m.label,
-      title:m.path+'\n'+m.lines+' lines  '+m.fn_count+' fns\nClick to expand',
+      title:m.path+'\\n'+m.lines+' lines  '+m.fn_count+' fns\\nClick to expand',
       shape:'box',margin:8,
       color:{background:c.bg,border:c.b,highlight:{background:'#2d333b',border:c.b}},
       font:{color:c.b,size:14,bold:true,face:'monospace'},
@@ -646,7 +646,7 @@ function expand(mid){
     const f=fns[fid];if(!f||nodes.get(fid))return;
     const a=(2*Math.PI*i/n)-Math.PI/2;
     nodes.add({id:f.id,label:f.name,
-      title:f.sig+'\nL'+f.line+'\nClick to show calls',
+      title:f.sig+'\\nL'+f.line+'\\nClick to show calls',
       shape:'dot',size:10,
       x:p.x+r*Math.cos(a),y:p.y+r*Math.sin(a),
       color:{background:c.b+'44',border:c.b,highlight:{background:c.b,border:'#fff'}},
@@ -695,12 +695,14 @@ function toggleCalls(fid){
   }
 }
 
+init();
+
 const net=new vis.Network(document.getElementById('graph'),{nodes,edges},{
   physics:{solver:'forceAtlas2Based',
-    forceAtlas2Based:{gravitationalConstant:-80,centralGravity:0.01,springLength:200,springConstant:0.05,damping:0.4},
-    stabilization:{iterations:150,updateInterval:25}},
+    forceAtlas2Based:{gravitationalConstant:-30,centralGravity:0.1,springLength:150,springConstant:0.08,damping:0.6},
+    stabilization:{iterations:200,updateInterval:50,fit:true}},
   layout:{randomSeed:42},
-  interaction:{hover:true,tooltipDelay:150,navigationButtons:true,keyboard:true},
+  interaction:{hover:true,tooltipDelay:150,navigationButtons:false,keyboard:true},
   edges:{smooth:{type:'dynamic'},selectionWidth:2},
 });
 
@@ -712,17 +714,18 @@ net.on('click',p=>{
   else if(nd._t==='f'){toggleCalls(id);}
 });
 
-net.on('stabilizationIterationsDone',()=>net.setOptions({physics:{enabled:false}}));
+net.on('stabilizationIterationsDone',()=>{
+  net.setOptions({physics:{enabled:false}});
+  net.fit({animation:{duration:400,easingFunction:'easeInOutQuad'}});
+});
 
 function resetView(){
   [...expanded].forEach(id=>collapse(id));
   net.setOptions({physics:{enabled:true,stabilization:{iterations:100}}});
   setTimeout(()=>{net.setOptions({physics:{enabled:false}});net.fit();},1500);
 }
-function expandAll(){D.modules.forEach(m=>expand(m.id));net.setOptions({physics:{enabled:true}});}
+function expandAll(){D.modules.forEach(m=>expand(m.id));net.setOptions({physics:{enabled:true}});setTimeout(()=>net.fit(),800);}
 function collapseAll(){[...expanded].forEach(id=>collapse(id));}
-
-init();
 </script>
 </body>
 </html>
