@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 .vis-network.min.js
+CLAUDE.md
