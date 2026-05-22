@@ -618,7 +618,7 @@ const CL={
 };
 const gc=l=>CL[l]||CL.other;
 
-const COL_W=300,FX=200,SP=24,BASE_H=80,GAP=20;
+const COL_W=300,FX=200,SP=32,BASE_H=80,GAP=20;
 
 function mSlotH(mid){
   return expanded.has(mid)?Math.max(BASE_H,mods[mid].functions.length*SP+40):BASE_H;
@@ -700,7 +700,7 @@ function expand(mid,noRelay){
   const p=net.getPosition(mid);
   m.functions.forEach((fid,i)=>{
     const f=fns[fid];if(!f||nodes.get(fid))return;
-    nodes.add({id:f.id,label:f.name,
+    nodes.add({id:f.id,label:f.name.length>20?f.name.slice(0,18)+'…':f.name,
       title:f.sig+'\\nL'+f.line+'\\nClick to show calls',
       shape:'dot',size:8,
       x:p.x+FX, y:p.y+(i-(n-1)/2)*SP,
