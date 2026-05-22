@@ -577,7 +577,13 @@ body{background:#0d1117;color:#c9d1d9;font:13px/1.4 monospace;overflow:hidden}
 #bar h1{font-size:14px;color:#58a6ff;font-weight:bold;margin-right:4px}
 button{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:3px 12px;border-radius:6px;cursor:pointer;font:inherit}
 button:hover{background:#30363d}
-#hint{margin-left:auto;color:#8b949e;font-size:12px}
+#hint{color:#8b949e;font-size:12px}
+#srchwrap{display:flex;align-items:center;gap:4px;margin-left:auto}
+#srch{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:3px 10px;border-radius:6px;font:inherit;width:200px;outline:none}
+#srch:focus{border-color:#58a6ff}
+#srch.nomatch{border-color:#f85149;color:#f85149}
+#srchcount{color:#8b949e;font-size:12px;min-width:48px;text-align:center}
+.sarr{padding:2px 8px;font-size:13px}
 #graph{flex:1;min-height:0;overflow:hidden}
 #leg{position:fixed;bottom:14px;right:14px;background:#161b22dd;border:1px solid #30363d;border-radius:8px;padding:10px 14px;font-size:12px;line-height:2}
 .lr{display:flex;align-items:center;gap:8px}
@@ -591,6 +597,12 @@ button:hover{background:#30363d}
     <button onclick="resetView()">&#8635; Reset</button>
     <button onclick="expandAll()">&#10753; Expand all</button>
     <button onclick="collapseAll()">&#8863; Collapse all</button>
+    <div id="srchwrap">
+      <input id="srch" placeholder="Search file or function…" onkeydown="onSearchKey(event)">
+      <button class="sarr" onclick="srchHits.length?searchStep(-1):runSearch()" title="Previous">&#8593;</button>
+      <button class="sarr" onclick="srchHits.length?searchStep(1):runSearch()" title="Next">&#8595;</button>
+      <span id="srchcount"></span>
+    </div>
     <span id="hint">Click module to expand &bull; Click function to show its calls</span>
   </div>
   <div id="graph"></div>
@@ -781,6 +793,53 @@ net.on('dragEnd',p=>{
 });
 
 net.once('afterDrawing',()=>net.fit({animation:{duration:500,easingFunction:'easeInOutQuad'}}));
+
+let srchHits=[],srchIdx=0;
+
+function buildHits(q){
+  const hits=[];
+  D.modules.forEach(m=>{
+    const label=m.label||'',path=m.path||'';
+    if(label.toLowerCase()===q||path.toLowerCase().includes(q))
+      hits.push({type:'m',id:m.id,mid:m.id});
+  });
+  D.functions.forEach(f=>{
+    if(f.name.toLowerCase()===q)
+      hits.push({type:'f',id:f.id,mid:f.module});
+  });
+  return hits;
+}
+
+function jumpTo(hit){
+  if(hit.type==='f'){
+    if(!expanded.has(hit.mid))expand(hit.mid,true);
+    if(!nodes.get(hit.id))relayout();
+  }
+  const pos=net.getPositions([hit.id])[hit.id];
+  net.moveTo({position:pos,scale:1.4});
+}
+
+function runSearch(){
+  const el=document.getElementById('srch');
+  const q=el.value.trim().toLowerCase();
+  srchHits=q?buildHits(q):[];
+  srchIdx=0;
+  el.classList.toggle('nomatch',q.length>0&&srchHits.length===0);
+  document.getElementById('srchcount').textContent=srchHits.length?'1/'+srchHits.length:'';
+  if(srchHits.length)jumpTo(srchHits[0]);
+}
+
+function searchStep(dir){
+  if(!srchHits.length)return;
+  srchIdx=(srchIdx+dir+srchHits.length)%srchHits.length;
+  document.getElementById('srchcount').textContent=(srchIdx+1)+'/'+srchHits.length;
+  jumpTo(srchHits[srchIdx]);
+}
+
+function onSearchKey(e){
+  if(e.key==='Enter'){srchHits.length?searchStep(e.shiftKey?-1:1):runSearch();}
+  if(e.key==='Escape'){const el=document.getElementById('srch');el.value='';srchHits=[];srchIdx=0;el.classList.remove('nomatch');document.getElementById('srchcount').textContent='';}
+}
 
 function resetView(){
   pinned.clear();
