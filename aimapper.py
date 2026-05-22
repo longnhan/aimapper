@@ -617,19 +617,37 @@ const CL={
 const gc=l=>CL[l]||CL.other;
 
 function init(){
-  // Place modules in a circle — no physics needed, positions are fixed from the start
-  const n=D.modules.length;
-  const R=Math.max(220,n*28);
-  D.modules.forEach((m,i)=>{
+  // BFS to assign a call-depth level to each module (roots on the left)
+  const inDeg={};
+  D.modules.forEach(m=>{inDeg[m.id]=0;});
+  D.mod_edges.forEach(e=>{inDeg[e.to]=(inDeg[e.to]||0)+1;});
+
+  const lvl={};
+  const q=D.modules.filter(m=>!inDeg[m.id]).map(m=>m.id);
+  if(!q.length) D.modules.forEach(m=>q.push(m.id));   // all in cycles → put all at 0
+  q.forEach(id=>{lvl[id]=0;});
+  for(let i=0;i<q.length;i++){
+    D.mod_edges.filter(e=>e.from===q[i]).forEach(e=>{
+      if(lvl[e.to]===undefined){lvl[e.to]=lvl[q[i]]+1;q.push(e.to);}
+    });
+  }
+  const maxLvl=Math.max(0,...Object.values(lvl));
+  D.modules.forEach(m=>{if(lvl[m.id]===undefined)lvl[m.id]=maxLvl+1;});
+
+  // Group by level, then position: x = level column, y = row within column
+  const cols={};
+  D.modules.forEach(m=>{const l=lvl[m.id];(cols[l]=cols[l]||[]).push(m.id);});
+  const COL_W=300,ROW_H=100;
+  D.modules.forEach(m=>{
+    const l=lvl[m.id],peers=cols[l],row=peers.indexOf(m.id),n=peers.length;
     const c=gc(m.lang);
-    const a=(2*Math.PI*i/n)-Math.PI/2;
     nodes.add({id:m.id,label:m.label,
       title:m.path+'\\n'+m.lines+' lines  '+m.fn_count+' fns\\nClick to expand',
       shape:'box',margin:8,
-      x:Math.round(R*Math.cos(a)),y:Math.round(R*Math.sin(a)),
+      x:l*COL_W, y:(row-(n-1)/2)*ROW_H,
       color:{background:c.bg,border:c.b,highlight:{background:'#2d333b',border:c.b}},
       font:{color:c.b,size:14,bold:true,face:'monospace'},
-      borderWidth:2,_t:'m'});
+      borderWidth:2,_t:'m',_lvl:l});
   });
   D.mod_edges.forEach((e,i)=>{
     edges.add({id:'me'+i,from:e.from,to:e.to,
@@ -637,7 +655,7 @@ function init(){
       color:{color:'#484f58',highlight:'#58a6ff'},
       width:Math.max(1,Math.min(Math.sqrt(e.count),4)),
       title:e.count+' cross-call'+(e.count>1?'s':''),
-      smooth:{type:'curvedCW',roundness:0.2},
+      smooth:{type:'cubicBezier',forceDirection:'horizontal',roundness:0.4},
       _t:'me'});
   });
 }
@@ -647,21 +665,21 @@ function expand(mid){
   expanded.add(mid);
   const m=mods[mid],c=gc(m.lang),n=m.functions.length;
   const p=net.getPosition(mid);
-  const r=Math.max(80,n*14);
+  const FX=200,sp=Math.max(22,Math.min(38,520/Math.max(n,1)));
   m.functions.forEach((fid,i)=>{
     const f=fns[fid];if(!f||nodes.get(fid))return;
-    const a=(2*Math.PI*i/n)-Math.PI/2;
     nodes.add({id:f.id,label:f.name,
       title:f.sig+'\\nL'+f.line+'\\nClick to show calls',
-      shape:'dot',size:10,
-      x:Math.round(p.x+r*Math.cos(a)),y:Math.round(p.y+r*Math.sin(a)),
+      shape:'dot',size:8,
+      x:p.x+FX, y:p.y+(i-(n-1)/2)*sp,
       color:{background:c.b+'44',border:c.b,highlight:{background:c.b,border:'#fff'}},
       font:{color:'#c9d1d9',size:11,face:'monospace'},
-      physics:false,
       _t:'f',_m:mid});
     edges.add({id:'mf'+fid,from:mid,to:fid,
       arrows:'',dashes:[4,4],width:1,
-      color:{color:c.b+'30'},smooth:{type:'dynamic'},_t:'xe'});
+      color:{color:c.b+'40'},
+      smooth:{type:'cubicBezier',forceDirection:'horizontal',roundness:0.3},
+      _t:'xe'});
   });
   nodes.update({id:mid,label:m.label+' ▾',borderWidth:3});
 }
@@ -707,7 +725,7 @@ init();
 const net=new vis.Network(document.getElementById('graph'),{nodes,edges},{
   physics:{enabled:false},
   interaction:{hover:true,tooltipDelay:150,navigationButtons:false,keyboard:true,dragNodes:true},
-  edges:{smooth:{type:'curvedCW',roundness:0.2},selectionWidth:2},
+  edges:{smooth:{type:'cubicBezier',forceDirection:'horizontal',roundness:0.4},selectionWidth:2},
 });
 
 net.on('click',p=>{
@@ -725,7 +743,6 @@ function resetView(){
   net.fit({animation:{duration:500,easingFunction:'easeInOutQuad'}});
 }
 function expandAll(){D.modules.forEach(m=>expand(m.id));setTimeout(()=>net.fit({animation:{duration:600,easingFunction:'easeInOutQuad'}}),100);}
-function collapseAll(){[...expanded].forEach(id=>collapse(id));}
 function collapseAll(){[...expanded].forEach(id=>collapse(id));}
 </script>
 </body>
