@@ -607,7 +607,7 @@ const mods={},fns={};
 D.modules.forEach(m=>mods[m.id]=m);
 D.functions.forEach(f=>fns[f.id]=f);
 
-const expanded=new Set(),activeCalls=new Set();
+const expanded=new Set(),activeCalls=new Set(),pinned=new Set();
 const nodes=new vis.DataSet(),edges=new vis.DataSet();
 
 const CL={
