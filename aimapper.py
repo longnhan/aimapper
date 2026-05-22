@@ -638,12 +638,18 @@ function relayout(){
     let y=-total/2;
     mids.forEach((mid,i)=>{
       const cy=y+hs[i]/2;
-      upd.push({id:mid,x:l*COL_W,y:cy});
+      let mx,my;
+      if(pinned.has(mid)){
+        const p=net.getPosition(mid);mx=p.x;my=p.y;
+      } else {
+        mx=l*COL_W;my=cy;
+        upd.push({id:mid,x:mx,y:my});
+      }
       if(expanded.has(mid)){
         const m=mods[mid],n=m.functions.length;
         m.functions.forEach((fid,j)=>{
           if(!nodes.get(fid))return;
-          upd.push({id:fid,x:l*COL_W+FX,y:cy+(j-(n-1)/2)*SP});
+          upd.push({id:fid,x:mx+FX,y:my+(j-(n-1)/2)*SP});
         });
       }
       y+=hs[i]+GAP;
@@ -770,9 +776,14 @@ net.on('click',p=>{
   else if(nd._t==='f'){toggleCalls(id);}
 });
 
+net.on('dragEnd',p=>{
+  p.nodes.forEach(id=>{const nd=nodes.get(id);if(nd&&nd._t==='m')pinned.add(id);});
+});
+
 net.once('afterDrawing',()=>net.fit({animation:{duration:500,easingFunction:'easeInOutQuad'}}));
 
 function resetView(){
+  pinned.clear();
   [...expanded].forEach(id=>collapse(id,true));
   relayout();
   net.fit({animation:{duration:500,easingFunction:'easeInOutQuad'}});
