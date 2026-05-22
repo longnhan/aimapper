@@ -501,6 +501,8 @@ def _build_graph_data(file_map: Dict[str, dict]) -> dict:
 
     for rel, info in sorted(file_map.items()):
         ext = rel.rsplit(".", 1)[-1].lower() if "." in rel else ""
+        if ext in ("h", "hpp"):
+            continue
         lang = _LANG_MAP.get(ext, "other")
         mid = f"m:{rel}"
         fn_ids: List[str] = []
@@ -616,15 +618,48 @@ const CL={
 };
 const gc=l=>CL[l]||CL.other;
 
+const COL_W=300,FX=200,SP=24,BASE_H=80,GAP=20;
+
+function mSlotH(mid){
+  return expanded.has(mid)?Math.max(BASE_H,mods[mid].functions.length*SP+40):BASE_H;
+}
+
+function relayout(){
+  const byLvl={};
+  D.modules.forEach(m=>{
+    const nd=nodes.get(m.id);if(!nd)return;
+    const l=nd._lvl;(byLvl[l]=byLvl[l]||[]).push(m.id);
+  });
+  const upd=[];
+  Object.keys(byLvl).forEach(lk=>{
+    const l=parseInt(lk),mids=byLvl[lk];
+    const hs=mids.map(mSlotH);
+    const total=hs.reduce((a,b)=>a+b,0)+(mids.length-1)*GAP;
+    let y=-total/2;
+    mids.forEach((mid,i)=>{
+      const cy=y+hs[i]/2;
+      upd.push({id:mid,x:l*COL_W,y:cy});
+      if(expanded.has(mid)){
+        const m=mods[mid],n=m.functions.length;
+        m.functions.forEach((fid,j)=>{
+          if(!nodes.get(fid))return;
+          upd.push({id:fid,x:l*COL_W+FX,y:cy+(j-(n-1)/2)*SP});
+        });
+      }
+      y+=hs[i]+GAP;
+    });
+  });
+  nodes.update(upd);
+}
+
 function init(){
-  // BFS to assign a call-depth level to each module (roots on the left)
   const inDeg={};
   D.modules.forEach(m=>{inDeg[m.id]=0;});
   D.mod_edges.forEach(e=>{inDeg[e.to]=(inDeg[e.to]||0)+1;});
 
   const lvl={};
   const q=D.modules.filter(m=>!inDeg[m.id]).map(m=>m.id);
-  if(!q.length) D.modules.forEach(m=>q.push(m.id));   // all in cycles → put all at 0
+  if(!q.length) D.modules.forEach(m=>q.push(m.id));
   q.forEach(id=>{lvl[id]=0;});
   for(let i=0;i<q.length;i++){
     D.mod_edges.filter(e=>e.from===q[i]).forEach(e=>{
@@ -634,17 +669,15 @@ function init(){
   const maxLvl=Math.max(0,...Object.values(lvl));
   D.modules.forEach(m=>{if(lvl[m.id]===undefined)lvl[m.id]=maxLvl+1;});
 
-  // Group by level, then position: x = level column, y = row within column
   const cols={};
   D.modules.forEach(m=>{const l=lvl[m.id];(cols[l]=cols[l]||[]).push(m.id);});
-  const COL_W=300,ROW_H=100;
   D.modules.forEach(m=>{
     const l=lvl[m.id],peers=cols[l],row=peers.indexOf(m.id),n=peers.length;
     const c=gc(m.lang);
     nodes.add({id:m.id,label:m.label,
       title:m.path+'\\n'+m.lines+' lines  '+m.fn_count+' fns\\nClick to expand',
       shape:'box',margin:8,
-      x:l*COL_W, y:(row-(n-1)/2)*ROW_H,
+      x:l*COL_W, y:(row-(n-1)/2)*(BASE_H+GAP),
       color:{background:c.bg,border:c.b,highlight:{background:'#2d333b',border:c.b}},
       font:{color:c.b,size:14,bold:true,face:'monospace'},
       borderWidth:2,_t:'m',_lvl:l});
@@ -660,18 +693,17 @@ function init(){
   });
 }
 
-function expand(mid){
+function expand(mid,noRelay){
   if(expanded.has(mid))return;
   expanded.add(mid);
   const m=mods[mid],c=gc(m.lang),n=m.functions.length;
   const p=net.getPosition(mid);
-  const FX=200,sp=Math.max(22,Math.min(38,520/Math.max(n,1)));
   m.functions.forEach((fid,i)=>{
     const f=fns[fid];if(!f||nodes.get(fid))return;
     nodes.add({id:f.id,label:f.name,
       title:f.sig+'\\nL'+f.line+'\\nClick to show calls',
       shape:'dot',size:8,
-      x:p.x+FX, y:p.y+(i-(n-1)/2)*sp,
+      x:p.x+FX, y:p.y+(i-(n-1)/2)*SP,
       color:{background:c.b+'44',border:c.b,highlight:{background:c.b,border:'#fff'}},
       font:{color:'#c9d1d9',size:11,face:'monospace'},
       _t:'f',_m:mid});
@@ -682,9 +714,10 @@ function expand(mid){
       _t:'xe'});
   });
   nodes.update({id:mid,label:m.label+' ▾',borderWidth:3});
+  if(!noRelay)relayout();
 }
 
-function collapse(mid){
+function collapse(mid,noRelay){
   if(!expanded.has(mid))return;
   expanded.delete(mid);
   const m=mods[mid],rn=[],re=[];
@@ -698,6 +731,7 @@ function collapse(mid){
   });
   nodes.remove(rn);edges.remove([...new Set(re)]);
   nodes.update({id:mid,label:m.label,borderWidth:2});
+  if(!noRelay)relayout();
 }
 
 function toggleCalls(fid){
@@ -739,11 +773,12 @@ net.on('click',p=>{
 net.once('afterDrawing',()=>net.fit({animation:{duration:500,easingFunction:'easeInOutQuad'}}));
 
 function resetView(){
-  [...expanded].forEach(id=>collapse(id));
+  [...expanded].forEach(id=>collapse(id,true));
+  relayout();
   net.fit({animation:{duration:500,easingFunction:'easeInOutQuad'}});
 }
-function expandAll(){D.modules.forEach(m=>expand(m.id));setTimeout(()=>net.fit({animation:{duration:600,easingFunction:'easeInOutQuad'}}),100);}
-function collapseAll(){[...expanded].forEach(id=>collapse(id));}
+function expandAll(){D.modules.forEach(m=>expand(m.id,true));relayout();setTimeout(()=>net.fit({animation:{duration:600,easingFunction:'easeInOutQuad'}}),100);}
+function collapseAll(){[...expanded].forEach(id=>collapse(id,true));relayout();}
 </script>
 </body>
 </html>
